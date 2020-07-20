@@ -21,31 +21,78 @@ FriendlyEats.prototype.addRestaurant = function(data) {
 };
 
 FriendlyEats.prototype.getAllRestaurants = function(renderer) {
-  /*
-    TODO: Retrieve list of restaurants
-  */
+  let query = firebase.firestore()
+    .collection('restaurants')
+    .orderBy('avgRating', 'desc')
+    .limit(50)
+
+  this.getDocumentsInQuery(query, renderer);
 };
 
 FriendlyEats.prototype.getDocumentsInQuery = function(query, renderer) {
-  /*
-    TODO: Render all documents in the provided query
-  */
+  query.onSnapshot(function(snapshot) {
+    if (!snapshot.size) return renderer.empty(); // Display "there are no restaurants"
+
+    snapshot.docChanges().forEach(function(change) {
+      if (change.type === 'removed') {
+        renderer.remove(change.doc);
+      } else {
+        renderer.display(change.doc);
+      }
+    })
+  })
 };
 
 FriendlyEats.prototype.getRestaurant = function(id) {
-  /*
-    TODO: Retrieve a single restaurant
-  */
+  return firebase.firestore().collection('restaurants').doc(id).get();
 };
 
 FriendlyEats.prototype.getFilteredRestaurants = function(filters, renderer) {
-  /*
-    TODO: Retrieve filtered list of restaurants
-  */
+  let query = firebase.firestore().collection('restaurants');
+
+  if (filters.category !== 'Any') {
+    query = query.where('category', '==', filters.category);
+  }
+
+  if (filters.city !== 'Any') {
+    query = query.where('city', '==', filters.city);
+  }
+
+  if (filters.price !== 'Any') {
+    query = query.where('price', '==', filters.price.length);
+  }
+
+  if (filters.sort === 'Rating') {
+    query = query.orderBy('avgRating', 'desc');
+  } else if (filters.sort === 'Reviews') {
+    query = query.orderBy('numRatings', 'desc');
+  }
+
+  this.getDocumentsInQuery(query, renderer);
 };
 
 FriendlyEats.prototype.addRating = function(restaurantID, rating) {
-  /*
-    TODO: Retrieve add a rating to a restaurant
-  */
+  let collection = firebase.firestor().collection('restaurants');
+  let document = collection.doc(restaurantID);
+  let newRatingDocument = document.collection('ratings').doc();
+
+  return firebase.firestore().runTransaction(function(transaction) {
+    return transaction.get(document).then(function(doc) {
+      let data = doc.data();
+      // in a production app you should perform the average rating 
+      // calculation on a trusted server to avoid manipulation by users
+      let newAverage = 
+        (data.numRatings * data.avgRating + rating.rating) /
+        (data.numRatings + 1);
+
+      transaction.update(document, {
+        numRatings: data.numRatings + 1,
+        avgRating: newAverage
+      });
+      return transaction.set(newRatingDocument, rating);
+
+      // When a transaction fails on the server, the callback is also re-executed repeatedly. 
+      // Never place logic that modifies app state inside the transaction callback.
+    })
+  })
 };
